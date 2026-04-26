@@ -1,0 +1,11 @@
+data/
+downloads/
+logs/
+__pycache__/
+.venv/
+
+*.db
+*.mp4
+*.webm
+*.log
+*.pyc

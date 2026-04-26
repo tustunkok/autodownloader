@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoDownloader</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            max-width: 720px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            background: #f5f7fa;
+            color: #1a1a1a;
+            line-height: 1.5;
+        }
+        h1 { text-align: center; margin-bottom: 1.5rem; }
+        form {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        label {
+            display: block;
+            margin-top: 1rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.55rem;
+            margin-top: 0.25rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            background: #fff;
+        }
+        button {
+            margin-top: 1.5rem;
+            width: 100%;
+            padding: 0.75rem;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #1d4ed8; }
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        @media (max-width: 560px) {
+            .row { grid-template-columns: 1fr; }
+        }
+        #statusCard {
+            margin-top: 1.5rem;
+            background: #fff;
+            padding: 1.25rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: none;
+        }
+        #statusCard.active { display: block; }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .queued    { background: #e5e7eb; color: #374151; }
+        .downloading{ background: #fef3c7; color: #92400e; }
+        .processing{ background: #dbeafe; color: #1e40af; }
+        .ready     { background: #d1fae5; color: #065f46; }
+        .error     { background: #fee2e2; color: #991b1b; }
+        .expired   { background: #f3f4f6; color: #4b5563; }
+        .meta { color: #6b7280; font-size: 0.9rem; margin-top: 0.25rem; }
+        a.downloadBtn {
+            display: inline-block;
+            margin-top: 0.75rem;
+            padding: 0.6rem 1.2rem;
+            background: #059669;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        a.downloadBtn:hover { background: #047857; }
+        .crfWrap { display:flex; align-items:center; gap:0.5rem; }
+        .crfWrap input { flex: 1; }
+    </style>
+</head>
+<body>
+    <h1>Video Downloader</h1>
+
+    <form id="downloadForm">
+        <label for="url">Video URL</label>
+        <input type="url" id="url" name="url" placeholder="https://..." required>
+
+        <div class="row">
+            <div>
+                <label for="resolution">Resolution</label>
+                <select id="resolution" name="resolution">
+                    <option value="original">Original</option>
+                    <option value="1920x1080" selected>1920x1080</option>
+                    <option value="1280x720">1280x720</option>
+                    <option value="854x480">854x480</option>
+                    <option value="640x360">640x360</option>
+                </select>
+            </div>
+            <div>
+                <label for="fps">Frame Rate</label>
+                <select id="fps" name="fps">
+                    <option value="original">Original</option>
+                    <option value="30" selected>30</option>
+                    <option value="60">60</option>
+                    <option value="24">24</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <label for="codec">Video Codec</label>
+                <select id="codec" name="codec">
+                    <option value="libx265" selected>HEVC (libx265)</option>
+                    <option value="libx264">H.264 (libx264)</option>
+                </select>
+            </div>
+            <div>
+                <label for="preset">Preset</label>
+                <select id="preset" name="preset">
+                    <option value="ultrafast">ultrafast</option>
+                    <option value="superfast">superfast</option>
+                    <option value="veryfast">veryfast</option>
+                    <option value="faster">faster</option>
+                    <option value="fast">fast</option>
+                    <option value="medium" selected>medium</option>
+                    <option value="slow">slow</option>
+                    <option value="slower">slower</option>
+                    <option value="veryslow">veryslow</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <label for="crf">CRF (18–35)</label>
+                <div class="crfWrap">
+                    <input type="range" id="crf" name="crf" min="18" max="35" value="28"
+                           oninput="document.getElementById('crfVal').innerText = this.value">
+                    <span id="crfVal" style="min-width:1.5rem; font-weight:700;">28</span>
+                </div>
+            </div>
+            <div>
+                <label for="audio">Audio</label>
+                <select id="audio" name="audio">
+                    <option value="copy" selected>Copy original</option>
+                    <option value="aac">Re-encode AAC</option>
+                </select>
+            </div>
+        </div>
+
+        <button type="submit">Submit</button>
+    </form>
+
+    <div id="statusCard">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+            <h2 style="margin:0; font-size:1.1rem;">Job Status</h2>
+            <span id="badge" class="badge">-</span>
+        </div>
+        <p id="msg" class="meta">-</p>
+        <div id="dlWrap" style="display:none;">
+            <a id="dlBtn" class="downloadBtn" href="#" download>Download processed video</a>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('downloadForm');
+        const card = document.getElementById('statusCard');
+        const badge = document.getElementById('badge');
+        const msg = document.getElementById('msg');
+        const dlWrap = document.getElementById('dlWrap');
+        const dlBtn = document.getElementById('dlBtn');
+
+        let pollTimer = null;
+
+        function setStatus(data) {
+            card.classList.add('active');
+            badge.className = 'badge ' + data.status;
+            badge.textContent = data.status;
+            msg.textContent = data.message || '';
+
+            if (data.status === 'ready') {
+                dlWrap.style.display = 'block';
+                dlBtn.href = '/download/' + data.job_id;
+                dlBtn.download = data.final_filename || 'download.mp4';
+                stopPoll();
+            } else if (['error', 'expired'].includes(data.status)) {
+                dlWrap.style.display = 'none';
+                stopPoll();
+            } else {
+                dlWrap.style.display = 'none';
+            }
+        }
+
+        async function check(jobId) {
+            try {
+                const r = await fetch('/status/' + jobId);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                setStatus(await r.json());
+            } catch (e) {
+                msg.textContent = 'Status fetch failed: ' + e.message;
+            }
+        }
+
+        function startPoll(jobId) {
+            stopPoll();
+            check(jobId);
+            pollTimer = setInterval(() => check(jobId), 3000);
+        }
+
+        function stopPoll() {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(form);
+            const r = await fetch('/submit', { method: 'POST', body: fd });
+            if (!r.ok) { alert('Submission failed'); return; }
+            const data = await r.json();
+            const jobId = data.job_id;
+            history.pushState(null, '', '/?job_id=' + jobId);
+            startPoll(jobId);
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        const existing = params.get('job_id');
+        if (existing) startPoll(existing);
+    </script>
+</body>
+</html>
