@@ -104,6 +104,25 @@ def build_ffmpeg_command(input_path: Path, output_path: Path, params: dict) -> l
     return cmd
 
 
+def build_output_name(original_name: str, params: dict) -> str:
+    p = Path(original_name)
+    stem = p.stem
+    suffix = ".mp4"
+    codec = params.get("codec", "libx265").replace("lib", "")
+
+    res = params.get("resolution", "original")
+    fps = params.get("fps", "original")
+
+    parts = [codec]
+    if res.lower() != "original":
+        parts.append(res.split("x")[1] + "p")
+    if fps.lower() != "original":
+        parts.append(fps)
+
+    tag = "_".join(parts)
+    return f"{stem}_{tag}{suffix}"
+
+
 async def run_ffmpeg(job_id: str, input_path: Path, output_path: Path, params: dict) -> None:
     cmd = build_ffmpeg_command(input_path, output_path, params)
     logger.info("Job %s: Starting ffmpeg: %s", job_id, " ".join(cmd))
@@ -138,28 +157,68 @@ async def process_job(job_id: str) -> None:
         return
 
     try:
-        url = job["url"]
         params = json.loads(job["params_json"])
         download_dir = Path(job["download_dir"])
+        source_type = params.get("source_type", "url")
+        apply_ffmpeg = params.get("apply_ffmpeg", True)
 
-        downloaded_file = await run_yt_dlp(job_id, url, download_dir)
-        await update_job_status(
-            job_id,
-            "downloading",
-            message="Download complete",
-            original_filename=downloaded_file.name,
-        )
+        if source_type == "url":
+            url = job["url"]
+            downloaded_file = await run_yt_dlp(job_id, url, download_dir)
+            await update_job_status(
+                job_id,
+                "downloading",
+                message="Download complete",
+                original_filename=downloaded_file.name,
+            )
 
-        output_path = download_dir / "processed_output.mp4"
-        await run_ffmpeg(job_id, downloaded_file, output_path, params)
+            if apply_ffmpeg:
+                output_path = download_dir / build_output_name(downloaded_file.name, params)
+                await run_ffmpeg(job_id, downloaded_file, output_path, params)
+                await update_job_status(
+                    job_id,
+                    "ready",
+                    message="Processing complete",
+                    final_filename=output_path.name,
+                )
+                logger.info("Job %s: Ready for download", job_id)
+            else:
+                # Skip ffmpeg; the downloaded file is the final output
+                await update_job_status(
+                    job_id,
+                    "ready",
+                    message="Download complete (ffmpeg skipped)",
+                    final_filename=downloaded_file.name,
+                )
+                logger.info("Job %s: Ready for download (ffmpeg skipped)", job_id)
 
-        await update_job_status(
-            job_id,
-            "ready",
-            message="Processing complete",
-            final_filename=output_path.name,
-        )
-        logger.info("Job %s: Ready for download", job_id)
+        elif source_type == "upload":
+            original_name = job.get("original_filename")
+            if not original_name:
+                raise RuntimeError("Uploaded file original name is missing")
+
+            uploaded_file = download_dir / original_name
+            if not uploaded_file.exists():
+                raise RuntimeError(f"Uploaded file not found on disk: {uploaded_file}")
+
+            await update_job_status(
+                job_id,
+                "processing",
+                message="Starting processing for uploaded file...",
+            )
+
+            output_path = download_dir / build_output_name(original_name, params)
+            await run_ffmpeg(job_id, uploaded_file, output_path, params)
+
+            await update_job_status(
+                job_id,
+                "ready",
+                message="Processing complete",
+                final_filename=output_path.name,
+            )
+            logger.info("Job %s: Ready for download", job_id)
+        else:
+            raise RuntimeError(f"Unknown source_type: {source_type}")
 
         asyncio.create_task(cleanup_job(job_id, delay_seconds=RETENTION_SECONDS))
     except Exception:

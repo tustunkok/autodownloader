@@ -96,14 +96,79 @@
         a.downloadBtn:hover { background: #047857; }
         .crfWrap { display:flex; align-items:center; gap:0.5rem; }
         .crfWrap input { flex: 1; }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+            margin-top: 0.5rem;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: #d1d5db;
+            border-radius: 34px;
+            transition: .4s;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #fff;
+            border-radius: 50%;
+            transition: .4s;
+        }
+        .toggle-switch input:checked + .slider {
+            background-color: #2563eb;
+        }
+        .toggle-switch input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+        }
+        .toggle-label span {
+            font-weight: 600;
+        }
+        .source-hint {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
     </style>
 </head>
 <body>
     <h1>Video Downloader</h1>
 
-    <form id="downloadForm">
+    <form id="downloadForm" enctype="multipart/form-data">
         <label for="url">Video URL</label>
-        <input type="url" id="url" name="url" placeholder="https://..." required>
+        <input type="url" id="url" name="url" placeholder="https://...">
+        <p class="source-hint">Enter a URL <strong>OR</strong> upload a file below.</p>
+
+        <label for="video_file">Upload Video</label>
+        <input type="file" id="video_file" name="video_file" accept="video/*">
+
+        <input type="hidden" name="apply_ffmpeg" value="false">
+        <label class="toggle-label">
+            <div class="toggle-switch">
+                <input type="checkbox" id="apply_ffmpeg" name="apply_ffmpeg" value="true" checked>
+                <span class="slider"></span>
+            </div>
+            <span>Apply FFmpeg preprocessing</span>
+        </label>
+        <p class="source-hint" id="ffmpegHint">For URLs, ffmpeg processing is applied after download. For uploads, ffmpeg is always applied.</p>
 
         <div class="row">
             <div>
@@ -190,8 +255,38 @@
         const msg = document.getElementById('msg');
         const dlWrap = document.getElementById('dlWrap');
         const dlBtn = document.getElementById('dlBtn');
+        const urlInput = document.getElementById('url');
+        const fileInput = document.getElementById('video_file');
+        const applyFfmpeg = document.getElementById('apply_ffmpeg');
+        const ffmpegHint = document.getElementById('ffmpegHint');
 
         let pollTimer = null;
+
+        // Mutual exclusivity: URL vs upload
+        urlInput.addEventListener('input', () => {
+            if (urlInput.value.trim()) {
+                fileInput.disabled = true;
+                fileInput.value = '';
+                applyFfmpeg.disabled = false;
+                ffmpegHint.textContent = 'For URLs, ffmpeg processing is applied after download.';
+            } else {
+                fileInput.disabled = false;
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                urlInput.disabled = true;
+                urlInput.value = '';
+                applyFfmpeg.checked = true;
+                applyFfmpeg.disabled = true;
+                ffmpegHint.textContent = 'For uploads, ffmpeg processing is always applied.';
+            } else {
+                urlInput.disabled = false;
+                applyFfmpeg.disabled = false;
+                ffmpegHint.textContent = 'For URLs, ffmpeg processing is applied after download. For uploads, ffmpeg is always applied.';
+            }
+        });
 
         function setStatus(data) {
             card.classList.add('active');
@@ -236,7 +331,11 @@
             e.preventDefault();
             const fd = new FormData(form);
             const r = await fetch('/submit', { method: 'POST', body: fd });
-            if (!r.ok) { alert('Submission failed'); return; }
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({ detail: 'Submission failed' }));
+                alert(err.detail || 'Submission failed');
+                return;
+            }
             const data = await r.json();
             const jobId = data.job_id;
             history.pushState(null, '', '/?job_id=' + jobId);

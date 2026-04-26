@@ -5,11 +5,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from autodownloader.database import create_job, get_job, init_db
+from autodownloader.database import create_job, get_job, init_db, update_job_status
 from autodownloader.logger import setup_logging
 from autodownloader.processor import cleanup_job, cleanup_old_jobs, process_job
 
@@ -70,7 +70,9 @@ async def index(request: Request, job_id: str | None = None):
 
 @app.post("/submit")
 async def submit(
-    url: str = Form(...),
+    url: str = Form(""),
+    video_file: UploadFile | None = File(None),
+    apply_ffmpeg: bool = Form(True),
     resolution: str = Form("1920x1080"),
     fps: str = Form("30"),
     codec: str = Form("libx265"),
@@ -78,6 +80,14 @@ async def submit(
     preset: str = Form("medium"),
     audio: str = Form("copy"),
 ):
+    has_url = bool(url.strip())
+    has_file = video_file is not None
+
+    if has_url and has_file:
+        raise HTTPException(status_code=400, detail="Provide either a URL or a file, not both.")
+    if not has_url and not has_file:
+        raise HTTPException(status_code=400, detail="Provide either a URL or a file.")
+
     job_id = str(uuid.uuid4())
     params = {
         "resolution": resolution,
@@ -86,9 +96,27 @@ async def submit(
         "crf": crf,
         "preset": preset,
         "audio": audio,
+        "source_type": "url" if has_url else "upload",
+        "apply_ffmpeg": apply_ffmpeg,
     }
-    logger.info("Received submission job_id=%s url=%s params=%s", job_id, url, params)
-    await create_job(job_id, url, params)
+
+    logger.info("Received submission job_id=%s url=%s has_file=%s params=%s", job_id, url, has_file, params)
+
+    if has_file:
+        # Save the uploaded file immediately so the processor can find it
+        download_dir = Path("downloads") / job_id
+        download_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = Path(video_file.filename).name
+        file_path = download_dir / safe_name
+        content = await video_file.read()
+        file_path.write_bytes(content)
+        logger.info("Job %s: Saved uploaded file to %s", job_id, file_path)
+
+        await create_job(job_id, "", params)
+        await update_job_status(job_id, "queued", original_filename=safe_name)
+    else:
+        await create_job(job_id, url, params)
+
     asyncio.create_task(process_job(job_id))
     return {"job_id": job_id}
 
