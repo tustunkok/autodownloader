@@ -18,7 +18,12 @@ async def _stream_logs(prefix: str, stream, job_id: str) -> None:
     if not stream:
         return
     while True:
-        line = await stream.readline()
+        try:
+            line = await stream.readline()
+        except (ValueError, asyncio.LimitOverrunError):
+            # Line exceeds stream buffer limit; skip the chunk so the job survives.
+            logger.warning("Job %s: %s line too long, skipping chunk", job_id, prefix)
+            continue
         if not line:
             break
         text = line.decode("utf-8", errors="replace").rstrip()
@@ -108,6 +113,7 @@ async def run_ffmpeg(job_id: str, input_path: Path, output_path: Path, params: d
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        limit=2**20,
     )
 
     await asyncio.gather(
