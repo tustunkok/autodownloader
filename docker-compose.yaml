@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  autodownloader:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      RETENTION_SECONDS: "86400"
+    volumes:
+      - ./data:/app/data
+      - ./downloads:/app/downloads
+      - ./logs:/app/logs
+    restart: unless-stopped
