@@ -33,7 +33,7 @@ async def run_yt_dlp(job_id: str, url: str, download_dir: Path) -> Path:
     logger.info("Job %s: Starting yt-dlp download for %s", job_id, url)
     await update_job_status(job_id, "downloading", message="Starting download...")
 
-    def _download() -> list:
+    def _download() -> int:
         import yt_dlp
 
         ydl_opts = {
@@ -43,10 +43,10 @@ async def run_yt_dlp(job_id: str, url: str, download_dir: Path) -> Path:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             return ydl.download([url])
 
-    error_codes = await asyncio.to_thread(_download)
+    error_code = await asyncio.to_thread(_download)
 
-    if any(error_codes):
-        logger.error("Job %s: yt-dlp failed with error codes %s", job_id, error_codes)
+    if error_code != 0:
+        logger.error("Job %s: yt-dlp failed with error code %d", job_id, error_code)
         raise RuntimeError("yt-dlp download failed")
 
     files = [f for f in download_dir.iterdir() if f.suffix not in (".part", ".ytdl")]
