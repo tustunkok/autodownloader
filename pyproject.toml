@@ -8,6 +8,7 @@ dependencies = [
     "aiosqlite",
     "jinja2",
     "python-multipart",
+    "yt-dlp",
 ]
 
 [build-system]

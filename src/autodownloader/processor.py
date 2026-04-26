@@ -30,32 +30,23 @@ async def run_yt_dlp(job_id: str, url: str, download_dir: Path) -> Path:
     download_dir.mkdir(parents=True, exist_ok=True)
     output_template = str(download_dir / "%(title)s.%(ext)s")
 
-    cmd = [
-        "yt-dlp",
-        "--no-playlist",
-        "-o",
-        output_template,
-        url,
-    ]
-
-    logger.info("Job %s: Starting yt-dlp download: %s", job_id, " ".join(cmd))
+    logger.info("Job %s: Starting yt-dlp download for %s", job_id, url)
     await update_job_status(job_id, "downloading", message="Starting download...")
 
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    def _download() -> list:
+        import yt_dlp
 
-    await asyncio.gather(
-        _stream_logs("[yt-dlp stdout]", process.stdout, job_id),
-        _stream_logs("[yt-dlp stderr]", process.stderr, job_id),
-    )
+        ydl_opts = {
+            "outtmpl": output_template,
+            "noplaylist": True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            return ydl.download([url])
 
-    returncode = await process.wait()
+    error_codes = await asyncio.to_thread(_download)
 
-    if returncode != 0:
-        logger.error("Job %s: yt-dlp failed with exit code %d", job_id, returncode)
+    if any(error_codes):
+        logger.error("Job %s: yt-dlp failed with error codes %s", job_id, error_codes)
         raise RuntimeError("yt-dlp download failed")
 
     files = [f for f in download_dir.iterdir() if f.suffix not in (".part", ".ytdl")]
