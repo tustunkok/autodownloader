@@ -1,6 +1,6 @@
 [project]
 name = "autodownloader"
-version = "0.1.0a3"
+version = "0.1.0a4"
 description = "Async video downloader and processor via web UI"
 requires-python = ">=3.13"
 dependencies = [
