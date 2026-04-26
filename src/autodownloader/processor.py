@@ -1,10 +1,13 @@
 import asyncio
 import json
 import logging
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+RETENTION_SECONDS = int(os.getenv("RETENTION_SECONDS", "86400"))
 
 from autodownloader.database import get_job, get_ready_jobs, update_job_status
 
@@ -161,8 +164,7 @@ async def process_job(job_id: str) -> None:
         )
         logger.info("Job %s: Ready for download", job_id)
 
-        # Schedule deletion after 24 hours (86400 seconds)
-        asyncio.create_task(cleanup_job(job_id, delay_seconds=86400))
+        asyncio.create_task(cleanup_job(job_id, delay_seconds=RETENTION_SECONDS))
     except Exception:
         logger.exception("Job %s: Unhandled exception during processing", job_id)
         await update_job_status(job_id, "error", message="Processing failed (see logs)")
@@ -207,14 +209,15 @@ async def cleanup_old_jobs() -> None:
             dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
         except ValueError:
             try:
-                dt = datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc
-                )
+                dt = datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 continue
 
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
         age = (now - dt).total_seconds()
-        if age > 86400:
+        if age > RETENTION_SECONDS:
             logger.info("Job %s: Expired on startup (age %.0f s)", job["id"], age)
             await cleanup_job(job["id"], delay_seconds=0)
 

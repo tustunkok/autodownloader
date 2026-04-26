@@ -20,13 +20,22 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
-async def _periodic_cleanup_task(interval: int = 3600) -> None:
-    while True:
-        await asyncio.sleep(interval)
-        try:
-            await cleanup_old_jobs()
-        except Exception:
-            logger.exception("Periodic cleanup task encountered an error")
+async def _periodic_cleanup_task(stop_event: asyncio.Event, interval: int = 3600) -> None:
+    try:
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            except asyncio.TimeoutError:
+                pass
+            else:
+                break
+            if not stop_event.is_set():
+                try:
+                    await cleanup_old_jobs()
+                except Exception:
+                    logger.exception("Periodic cleanup task encountered an error")
+    except asyncio.CancelledError:
+        pass
 
 
 @asynccontextmanager
@@ -36,14 +45,19 @@ async def lifespan(app: FastAPI):
     await init_db()
     await cleanup_old_jobs()
     # Start background cleanup loop
-    cleanup_task = asyncio.create_task(_periodic_cleanup_task())
-    yield
-    cleanup_task.cancel()
+    stop_event = asyncio.Event()
+    cleanup_task = asyncio.create_task(_periodic_cleanup_task(stop_event))
     try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
-    logger.info("Application shutting down...")
+        yield
+    finally:
+        stop_event.set()
+        try:
+            await asyncio.wait_for(cleanup_task, timeout=5)
+        except asyncio.TimeoutError:
+            logger.warning("Cleanup task did not finish within 5s, cancelling")
+            cleanup_task.cancel()
+        logger.info("Application shutting down...")
+        logging.shutdown()
 
 
 app = FastAPI(title="AutoDownloader", lifespan=lifespan)

@@ -37,5 +37,6 @@ def setup_logging() -> None:
         uvicorn_logger = logging.getLogger(uvicorn_logger_name)
         uvicorn_logger.handlers = root_logger.handlers[:]
         uvicorn_logger.setLevel(logging.DEBUG)
+        uvicorn_logger.propagate = False
 
     logging.getLogger("autodownloader").info("Logging system initialized")
