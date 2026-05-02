@@ -147,6 +147,34 @@
             color: #6b7280;
             margin-top: 0.25rem;
         }
+        #uploadStatus {
+            margin-top: 1rem;
+        }
+        #uploadStatus progress {
+            width: 100%;
+            height: 1.25rem;
+            border-radius: 6px;
+            overflow: hidden;
+            border: none;
+            background: #e5e7eb;
+        }
+        #uploadStatus progress::-webkit-progress-bar {
+            background: #e5e7eb;
+        }
+        #uploadStatus progress::-webkit-progress-value {
+            background: #2563eb;
+            transition: width 0.2s ease;
+        }
+        #uploadStatus progress::-moz-progress-bar {
+            background: #2563eb;
+        }
+        form.uploading input,
+        form.uploading select,
+        form.uploading button {
+            opacity: 0.6;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -234,8 +262,13 @@
             </div>
         </div>
 
-        <button type="submit">Submit</button>
+        <button type="submit" id="submitBtn">Submit</button>
     </form>
+
+    <div id="uploadStatus" style="display:none;">
+        <progress id="uploadProgress" value="0" max="100"></progress>
+        <p id="uploadText" class="meta">Uploading...</p>
+    </div>
 
     <div id="statusCard">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
@@ -327,19 +360,106 @@
             if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         }
 
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function setUploading(isUploading) {
+            if (isUploading) {
+                form.classList.add('uploading');
+            } else {
+                form.classList.remove('uploading');
+            }
+        }
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(form);
-            const r = await fetch('/submit', { method: 'POST', body: fd });
-            if (!r.ok) {
-                const err = await r.json().catch(() => ({ detail: 'Submission failed' }));
-                alert(err.detail || 'Submission failed');
-                return;
+            const hasFile = fileInput.files.length > 0;
+
+            if (hasFile) {
+                // Use XMLHttpRequest for file uploads to track progress
+                const uploadStatus = document.getElementById('uploadStatus');
+                const uploadProgress = document.getElementById('uploadProgress');
+                const uploadText = document.getElementById('uploadText');
+
+                uploadStatus.style.display = 'block';
+                uploadProgress.value = 0;
+                uploadText.textContent = 'Uploading...';
+                setUploading(true);
+
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener('progress', (event) => {
+                    if (event.lengthComputable) {
+                        const percent = Math.round((event.loaded / event.total) * 100);
+                        uploadProgress.value = percent;
+                        uploadText.textContent = `Uploading... ${formatBytes(event.loaded)} / ${formatBytes(event.total)} (${percent}%)`;
+                    } else {
+                        uploadText.textContent = 'Uploading...';
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    setUploading(false);
+                    uploadStatus.style.display = 'none';
+
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            const jobId = data.job_id;
+                            history.pushState(null, '', '/?job_id=' + jobId);
+                            startPoll(jobId);
+                        } catch (err) {
+                            alert('Invalid server response');
+                        }
+                    } else {
+                        let detail = 'Submission failed';
+                        try {
+                            const err = JSON.parse(xhr.responseText);
+                            detail = err.detail || detail;
+                        } catch (_) {}
+                        alert(detail);
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    setUploading(false);
+                    uploadStatus.style.display = 'none';
+                    alert('Upload failed. Please try again.');
+                });
+
+                xhr.addEventListener('abort', () => {
+                    setUploading(false);
+                    uploadStatus.style.display = 'none';
+                });
+
+                xhr.open('POST', '/submit');
+                xhr.send(fd);
+            } else {
+                // URL-only submission: use fetch with a quick spinner
+                setUploading(true);
+                try {
+                    const r = await fetch('/submit', { method: 'POST', body: fd });
+                    if (!r.ok) {
+                        const err = await r.json().catch(() => ({ detail: 'Submission failed' }));
+                        alert(err.detail || 'Submission failed');
+                        return;
+                    }
+                    const data = await r.json();
+                    const jobId = data.job_id;
+                    history.pushState(null, '', '/?job_id=' + jobId);
+                    startPoll(jobId);
+                } catch (e) {
+                    alert('Submission failed: ' + e.message);
+                } finally {
+                    setUploading(false);
+                }
             }
-            const data = await r.json();
-            const jobId = data.job_id;
-            history.pushState(null, '', '/?job_id=' + jobId);
-            startPoll(jobId);
         });
 
         const params = new URLSearchParams(window.location.search);
