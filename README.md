@@ -4,7 +4,7 @@ An async Python web application for downloading videos via [yt-dlp](https://gith
 
 ## Features
 
-- **Async Processing**: Submit a URL and get a job ID immediately. Long-running downloads and transcodes happen in the background without blocking the web server.
+- **Async Processing**: Submit a video URL or upload a file and get a job ID immediately. Long-running downloads and transcodes happen in the background without blocking the web server.
 - **Persistent State**: Job status is stored in SQLite, so you can close your browser and resume monitoring later by reopening the job URL.
 - **Configurable FFmpeg Options**: Choose resolution, frame rate, video codec (H.264/HEVC), CRF, preset, and audio handling directly from the web form.
 - **Automatic Cleanup**: Processed files are deleted after a configurable retention period (default: 24 hours). A periodic background task and startup sweep ensure nothing is left behind.
@@ -28,6 +28,12 @@ uv run uvicorn autodownloader.main:app --host 0.0.0.0 --port 8000
 ```
 
 Then open http://localhost:8000 in your browser.
+
+### Docker
+
+```bash
+docker compose up -d
+```
 
 ## Configuration
 
