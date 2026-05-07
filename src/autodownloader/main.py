@@ -108,8 +108,9 @@ async def submit(
         download_dir.mkdir(parents=True, exist_ok=True)
         safe_name = Path(video_file.filename).name
         file_path = download_dir / safe_name
-        content = await video_file.read()
-        file_path.write_bytes(content)
+        with file_path.open("wb") as f:
+            while chunk := await video_file.read(8192 * 1024):  # 8 MB chunks
+                f.write(chunk)
         logger.info("Job %s: Saved uploaded file to %s", job_id, file_path)
 
         await create_job(job_id, "", params)

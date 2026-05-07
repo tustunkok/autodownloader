@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-05-07
+
+### Fixed
+- Large file uploads (multi-GB) causing silent process restarts (OOM) by streaming writes to disk in 8 MB chunks instead of loading the entire file into memory.
+
 ## [0.1.0] - 2026-05-02
 
 First non-alpha release, stabilizing features from 0.1.0-alpha.1 through 0.1.0-alpha.5.
