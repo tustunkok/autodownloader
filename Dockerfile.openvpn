@@ -2,7 +2,7 @@
 FROM python:3.13-slim AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
+    ffmpeg openvpn iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
@@ -17,8 +17,12 @@ FROM base
 
 COPY src/ ./src/
 
-RUN mkdir -p data downloads logs
+RUN mkdir -p data downloads logs /etc/openvpn
+
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["uv", "run", "uvicorn", "autodownloader.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]

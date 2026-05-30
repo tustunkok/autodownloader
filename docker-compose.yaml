@@ -1,6 +1,8 @@
 services:
   autodownloader:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.openvpn
     ports:
       - "8000:8000"
     environment:
@@ -9,4 +11,7 @@ services:
       - ./data:/app/data
       - ./downloads:/app/downloads
       - ./logs:/app/logs
+      - ./autodownloader.conf:/etc/openvpn/autodownloader.conf:ro
+    cap_add:
+      - NET_ADMIN
     restart: unless-stopped

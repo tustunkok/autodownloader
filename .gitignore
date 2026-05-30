@@ -4,6 +4,8 @@ logs/
 __pycache__/
 .venv/
 
+autodownloader.conf
+
 *.db
 *.mp4
 *.webm
