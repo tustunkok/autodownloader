@@ -47,6 +47,17 @@ jobs:
             type=sha,prefix=,suffix=,format=short
             type=raw,value=latest
 
+      - name: Extract OpenVPN metadata
+        id: meta-openvpn
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/autodownloader
+          tags: |
+            type=semver,pattern={{version}}-openvpn
+            type=raw,value=latest-openvpn
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -56,6 +67,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push OpenVPN variant
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.openvpn
+          push: true
+          tags: ${{ steps.meta-openvpn.outputs.tags }}
+          labels: ${{ steps.meta-openvpn.outputs.labels }}
+          cache-from: type=gha
 
   release:
     needs: build-and-push
