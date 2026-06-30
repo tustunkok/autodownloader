@@ -1,6 +1,6 @@
 [project]
 name = "autodownloader"
-version = "0.2.2"
+version = "0.2.3"
 description = "Async video downloader and processor via web UI"
 requires-python = ">=3.13"
 dependencies = [
@@ -8,7 +8,7 @@ dependencies = [
     "aiosqlite",
     "jinja2",
     "python-multipart",
-    "yt-dlp",
+    "yt-dlp[curl-cffi,default]",
 ]
 
 [build-system]
